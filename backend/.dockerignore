@@ -1,0 +1,9 @@
+venv_jarvis/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+data/
+.git/
+.gitignore
+docs/
