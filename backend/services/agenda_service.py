@@ -31,7 +31,7 @@ def agenda_as_text() -> str:
     return "Agenda entries:\n" + "\n".join(lines)
 
 def _csv_bytes_to_dataframe(file_bytes: bytes) -> pd.DataFrame:
-    df = pd.read_csv(BytesIO(file_bytes))
+    df = pd.read_csv(BytesIO(file_bytes), dtype=str)
     df.columns = [_normalize_column_name(col) for col in df.columns]
 
     if "data" in df.columns:
