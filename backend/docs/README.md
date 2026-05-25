@@ -1,7 +1,9 @@
 # Documentação Geral
 
 ## Como rodar o sistema:
-#### O sistema está containerizado com docker nas melhores práticas de desenvolvimento, com apenas 1 container para a aplicação, apenas 1 servidor back-end. O comando ```docker compose up --build``` fará a construção e inicialização do container do servidor e irá expô-lo na porta 8000 da máquina.
+#### O sistema está containerizado com docker nas melhores práticas de desenvolvimento, com apenas 1 container para a aplicação, apenas 1 servidor back-end. 
+#### As configurações da imagem e do container estão no diretório do projeto backend. O front-end está estático. 
+#### O comando ```docker compose up --build``` fará a construção e inicialização do container do servidor e irá expô-lo na porta 8000 da máquina.
 
 ## Arquitetura
 #### Os documentos relativos à arquitetura do sistema estão anexados ao diretório raiz do repositório, sendo eles o Diagrama de Containers (c4model) e o Diagrama de Componentes (c4model) adaptado ao paradigma funcional.
