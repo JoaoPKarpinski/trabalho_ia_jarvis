@@ -6,6 +6,9 @@
 ## Arquitetura
 #### Os documentos relativos à arquitetura do sistema estão anexados ao diretório raiz do repositório, sendo eles o Diagrama de Containers (c4model) e o Diagrama de Componentes (c4model) adaptado ao paradigma funcional.
 
+## Dados teste
+#### Os documentos e demais inputs para teste do sistema estão no diretório "documentos_input". Eles já estão inseridos no sistema, no banco chroma e sqlite no dir "backend/data", então não há necessidade de re-processamento. Entretanto, se por acaso houver, os documentos podem ser reutilizados.
+
 ## Referências dos documentos utilizados para alimentar o sistema:
 - Documento engenharia-de-requisitos.pdf: https://www.maxwell.vrac.puc-rio.br/6954/6954_3.PDF
 - Documento arquitetura-serverlesspdf.pdf: https://monografias.dcc.ufmg.br/wp-content/uploads/LucasPereiraCarvalho.pdf
