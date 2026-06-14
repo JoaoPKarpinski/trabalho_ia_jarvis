@@ -12,7 +12,8 @@ const options = [
   { id: 'all', label: 'Visao geral' },
   { id: 'chat', label: 'Chat' },
   { id: 'agenda', label: 'Agenda' },
-  { id: 'tasks', label: 'Tarefas' }
+  { id: 'tasks', label: 'Tarefas' },
+  { id: 'quiz', label: 'Exercicios' }
 ]
 </script>
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
@@ -13,17 +14,41 @@ from services.task_service import complete_task, create_task, delete_task, list_
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_BASE_URL = "https://llm.liaufms.org/v1/gemma-3-12b-it"
 DEFAULT_MODEL = "google/gemma-3-12b-it"
-DEFAULT_TOOL_MODE = "manual"
+DEFAULT_TOOL_MODE = "wrapper"
 
 SYSTEM_PROMPT_AUTO = (
     "You are Jarvis, an academic assistant. "
-    "Use tools to fetch study materials (RAG), read the agenda, and manage tasks. "
-    "If a question needs document context, call the search_documents tool first. "
-    "If a question is about schedule, call the get_agenda tool. "
-    "If a question is about tasks, call the task tools. "
     "Respond in Brazilian Portuguese and keep answers concise."
+)
+
+TOOLS = [
+    "search_documents, to search for relevant document context based on a query. Arguments: query (str), top_k (int, optional)",
+    "get_agenda, to retrieve the user's agenda. Arguments: None",
+    "add_task, to add a new task. Arguments: title (str), description (str, optional)",
+    "list_tasks, to list all tasks. Arguments: None",
+    "complete_task, to mark a task as complete. Arguments: task_id (int)",
+    "update_task, to update an existing task. Arguments: task_id (int), title (str, optional), description (str, optional)",
+    "delete_task, to delete a task. Arguments: task_id (int)",
+]
+
+TOOL_CALLING_PROMPT = (
+    "Based on the user's message, the conversation context and the available local tools, decide if you need to call a tool to answer or perform the requested operation. "
+    "The available tools are:" + ";".join(TOOLS) + ". "
+    "Prefer search_documents every time the message relates to academic, technical or work/job related subject, and whenever the user request may depend on uploaded or indexed documents. "
+    "Respond only with JSON in the following format: {\"tool\": \"tool_name\", \"arguments\": {\"arg1\": \"value1\", \"arg2\": \"value2\"}}. "
+    "If no tool is needed, respond only with {\"tool\": null, \"arguments\": {}}. "
+)
+
+TOOL_RESPONSE_PROMPT = (
+    "You have called a tool and received the following response: {tool_response}. "
+    "The value returned from the called tool is: {tool_result}. "
+    "Use this information to help answer the user's question. "
+    "If you need to call another tool, respond with the JSON format mentioned before. "
+    "If you have enough information to answer the question, provide a concise answer in Brazilian Portuguese."
 )
 
 SYSTEM_PROMPT_MANUAL = (
@@ -34,187 +59,31 @@ SYSTEM_PROMPT_MANUAL = (
     "Respond in Brazilian Portuguese and keep answers concise."
 )
 
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_documents",
-            "description": "Search study materials and return relevant context.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "top_k": {"type": "integer", "default": 4},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_agenda",
-            "description": "Return the current agenda as text.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "add_task",
-            "description": "Add a task to the task list.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "description": {"type": "string"},
-                    "due_date": {"type": "string"},
-                },
-                "required": ["title"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_tasks",
-            "description": "List tasks.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "include_completed": {"type": "boolean", "default": True}
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "complete_task",
-            "description": "Mark a task as completed or not completed.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "integer"},
-                    "completed": {"type": "boolean", "default": True},
-                },
-                "required": ["task_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "update_task",
-            "description": "Update task fields.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "integer"},
-                    "title": {"type": "string"},
-                    "description": {"type": "string"},
-                    "due_date": {"type": "string"},
-                    "completed": {"type": "boolean"},
-                },
-                "required": ["task_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "delete_task",
-            "description": "Delete a task.",
-            "parameters": {
-                "type": "object",
-                "properties": {"task_id": {"type": "integer"}},
-                "required": ["task_id"],
-            },
-        },
-    },
-]
-
-
 def run_agent(message: str, history: Optional[List[Dict[str, str]]] = None) -> str:
     client = _get_client()
     messages = _normalize_history(history or [])
-
-    tool_mode = _get_tool_mode()
-    if tool_mode == "auto":
-        system_context = _get_system_context(message, include_context=False)
-        return _run_agent_with_tools(client, messages, message, system_context)
-    system_context = _get_system_context(message, include_context=True)
-    return _run_agent_manual(client, messages, message, system_context)
+    return orchestrate_operations(client, messages, message)
 
 
-def _run_agent_with_tools(
+def orchestrate_operations(
     client: OpenAI,
     messages: List[Dict[str, Any]],
     message: str,
-    system_context: str,
 ) -> str:
-    _apply_system_context(messages, system_context)
-    _append_user_message(messages, message)
+    working_messages = list(messages)
+    accumulated_context: List[str] = []
 
-    for _ in range(2):
-        response = client.chat.completions.create(
-            model=_get_model(),
-            messages=messages,
-            tools=TOOLS,
-            tool_choice="auto",
-            temperature=0.2,
-        )
-        reply = response.choices[0].message
-        tool_calls = reply.tool_calls or []
+    for _ in range(3):
+        tool_call = _request_tool_call(client, working_messages, message, accumulated_context)
+        if tool_call is None:
+            return _generate_final_answer(client, working_messages, message, accumulated_context)
 
-        if not tool_calls:
-            return reply.content or ""
+        tool_name = tool_call["tool"]
+        tool_arguments = tool_call["arguments"]
+        tool_result = _dispatch_tool(tool_name, json.dumps(tool_arguments, ensure_ascii=True))
+        accumulated_context.append(_format_tool_result(tool_name, tool_arguments, tool_result))
 
-        messages.append(
-            {
-                "role": "assistant",
-                "content": reply.content or "",
-                "tool_calls": [
-                    {
-                        "id": call.id,
-                        "type": call.type,
-                        "function": {
-                            "name": call.function.name,
-                            "arguments": call.function.arguments,
-                        },
-                    }
-                    for call in tool_calls
-                ],
-            }
-        )
-
-        for call in tool_calls:
-            result = _dispatch_tool(call.function.name, call.function.arguments)
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "content": json.dumps(result, ensure_ascii=True),
-                }
-            )
-
-    return "Desculpe, nao consegui completar a resposta agora."
-
-
-def _run_agent_manual(
-    client: OpenAI,
-    messages: List[Dict[str, Any]],
-    message: str,
-    system_context: str,
-) -> str:
-    _apply_system_context(messages, system_context)
-    _append_user_message(messages, message)
-    response = client.chat.completions.create(
-        model=_get_model(),
-        messages=messages,
-        temperature=0.2,
-    )
-    return response.choices[0].message.content or ""
+    return _generate_final_answer(client, working_messages, message, accumulated_context)
 
 
 def _get_client() -> OpenAI:
@@ -227,36 +96,6 @@ def _get_client() -> OpenAI:
 
 def _get_model() -> str:
     return os.getenv("LLM_MODEL", DEFAULT_MODEL)
-
-
-def _get_tool_mode() -> str:
-    mode = os.getenv("LLM_TOOL_MODE", DEFAULT_TOOL_MODE).strip().lower()
-    if mode not in {"auto", "manual"}:
-        return DEFAULT_TOOL_MODE
-    return mode
-
-
-def _get_system_context(message: str, include_context: bool) -> str:
-    prompt = SYSTEM_PROMPT_MANUAL if include_context else SYSTEM_PROMPT_AUTO
-    if not include_context:
-        return prompt
-    context = _build_context(message)
-    if context:
-        return prompt + "\n\n" + context
-    return prompt
-
-
-def _apply_system_context(messages: List[Dict[str, Any]], system_context: str) -> None:
-    if not system_context:
-        return
-
-    for item in messages:
-        if item.get("role") == "user":
-            item["content"] = system_context + "\n\n" + item.get("content", "")
-            return
-
-    messages.insert(0, {"role": "user", "content": system_context})
-
 
 def _append_user_message(messages: List[Dict[str, Any]], content: str) -> None:
     if not content:
@@ -287,73 +126,115 @@ def _normalize_history(history: List[Dict[str, str]]) -> List[Dict[str, Any]]:
     return normalized
 
 
-def _build_context(message: str) -> str:
-    message_lower = message.lower()
-    blocks: List[str] = []
+def _request_tool_call(
+    client: OpenAI,
+    messages: List[Dict[str, Any]],
+    message: str,
+    accumulated_context: List[str],
+) -> Optional[Dict[str, Any]]:
+    prompt_parts = [TOOL_CALLING_PROMPT]
+    if accumulated_context:
+        prompt_parts.append("Contexto já recuperado:\n" + "\n\n".join(accumulated_context))
+    prompt_parts.append("Mensagem do usuário:\n" + message)
+    prompt = "\n\n".join(prompt_parts)
 
-    rag = search_documents(query=message, top_k=4)
-    doc_context = rag.get("context", "")
-    if doc_context:
-        blocks.append("Contexto de documentos:\n" + doc_context)
-    else:
-        blocks.append("Contexto de documentos:\n(vazio)")
+    planner_messages = list(messages)
+    planner_messages.append({"role": "user", "content": prompt})
 
-    if _should_use_agenda(message_lower):
-        agenda_text = agenda_as_text()
-        if agenda_text:
-            blocks.append("Agenda:\n" + agenda_text)
-
-    if _should_use_tasks(message_lower):
-        tasks = list_tasks(include_completed=True)
-        blocks.append("Tarefas:\n" + json.dumps(tasks, ensure_ascii=True))
-
-    return "\n\n".join(blocks)
-
-
-def _should_use_documents(message_lower: str) -> bool:
-    keywords = (
-        "document",
-        "material",
-        "pdf",
-        "resum",
-        "conteudo",
-        "capitulo",
-        "trecho",
-        "anot",
-        "slide",
-        "apostila",
-        "livro",
-        "texto",
+    logger.info("[LLM][planner] prompt enviado:\n%s", _truncate_for_log(str(planner_messages)))
+    response = client.chat.completions.create(
+        model=_get_model(),
+        messages=planner_messages,
+        temperature=0.0,
     )
-    return any(keyword in message_lower for keyword in keywords)
+    content = response.choices[0].message.content or ""
+    logger.info("[LLM][planner] resposta bruta:\n%s", _truncate_for_log(content))
+    return _parse_tool_call(content)
 
 
-def _should_use_agenda(message_lower: str) -> bool:
-    keywords = (
-        "agenda",
-        "aula",
-        "prova",
-        "hoje",
-        "amanha",
-        "semana",
-        "horario",
-        "horarios",
-        "calendario",
-        "compromisso",
+def _generate_final_answer(
+    client: OpenAI,
+    messages: List[Dict[str, Any]],
+    message: str,
+    accumulated_context: List[str],
+) -> str:
+    prompt_parts = [SYSTEM_PROMPT_MANUAL]
+    if accumulated_context:
+        prompt_parts.append("Contexto recuperado pelas ferramentas:\n" + "\n\n".join(accumulated_context))
+    prompt_parts.append("Mensagem do usuário:\n" + message)
+    prompt = "\n\n".join(prompt_parts)
+
+    logger.info("[LLM][final] prompt enviado:\n%s", _truncate_for_log(prompt))
+
+    answer_messages = list(messages)
+    answer_messages.append({"role": "user", "content": prompt})
+    response = client.chat.completions.create(
+        model=_get_model(),
+        messages=answer_messages,
+        temperature=0.2,
     )
-    return any(keyword in message_lower for keyword in keywords)
+    content = response.choices[0].message.content or ""
+    logger.info("[LLM][final] resposta bruta:\n%s", _truncate_for_log(content))
+    return content
 
 
-def _should_use_tasks(message_lower: str) -> bool:
-    keywords = (
-        "tarefa",
-        "tarefas",
-        "lista",
-        "pendente",
-        "prazo",
-        "deadline",
+def _format_tool_result(tool_name: str, tool_arguments: Dict[str, Any], tool_result: Dict[str, Any]) -> str:
+    return (
+        f"Ferramenta executada: {tool_name}\n"
+        f"Argumentos: {json.dumps(tool_arguments, ensure_ascii=True)}\n"
+        f"Resultado: {json.dumps(tool_result, ensure_ascii=True)}"
     )
-    return any(keyword in message_lower for keyword in keywords)
+
+
+def _parse_tool_call(content: str) -> Optional[Dict[str, Any]]:
+    raw_content = (content or "").strip()
+    if not raw_content:
+        return None
+
+    candidate = _extract_json_object(raw_content)
+    if candidate is None:
+        return None
+
+    tool_name = candidate.get("tool") or candidate.get("name")
+    if isinstance(tool_name, dict):
+        tool_name = tool_name.get("name") or tool_name.get("tool")
+
+    if not tool_name:
+        return None
+
+    normalized_tool = str(tool_name).strip()
+    if normalized_tool.lower() in {"none", "null", "nada", "sem_tool", "no_tool"}:
+        return None
+
+    arguments = candidate.get("arguments") or candidate.get("args") or {}
+    if not isinstance(arguments, dict):
+        arguments = {}
+
+    return {"tool": normalized_tool, "arguments": arguments}
+
+
+def _extract_json_object(content: str) -> Optional[Dict[str, Any]]:
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    start = content.find("{")
+    end = content.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+
+    snippet = content[start : end + 1]
+    try:
+        parsed = json.loads(snippet)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        return None
+
+    return None
 
 
 def _dispatch_tool(name: str, raw_arguments: str) -> Dict[str, Any]:
@@ -362,39 +243,63 @@ def _dispatch_tool(name: str, raw_arguments: str) -> Dict[str, Any]:
     except json.JSONDecodeError:
         arguments = {}
 
+    logger.info("[TOOL] executando %s com argumentos: %s", name, _truncate_for_log(json.dumps(arguments, ensure_ascii=True)))
+
     try:
         if name == "search_documents":
             query = str(arguments.get("query", ""))
             top_k = int(arguments.get("top_k", 4))
-            return search_documents(query=query, top_k=top_k)
+            result = search_documents(query=query, top_k=top_k)
+            logger.info("[TOOL] resultado de %s: %s", name, _truncate_for_log(json.dumps(result, ensure_ascii=True)))
+            return result
         if name == "get_agenda":
-            return {"agenda": agenda_as_text()}
+            result = {"agenda": agenda_as_text()}
+            logger.info("[TOOL] resultado de %s: %s", name, _truncate_for_log(json.dumps(result, ensure_ascii=True)))
+            return result
         if name == "add_task":
-            return create_task(
+            result = create_task(
                 title=str(arguments.get("title", "")),
                 description=arguments.get("description"),
                 due_date=arguments.get("due_date"),
             )
+            logger.info("[TOOL] resultado de %s: %s", name, _truncate_for_log(json.dumps(result, ensure_ascii=True)))
+            return result
         if name == "list_tasks":
             include_completed = bool(arguments.get("include_completed", True))
-            return {"tasks": list_tasks(include_completed=include_completed)}
+            result = {"tasks": list_tasks(include_completed=include_completed)}
+            logger.info("[TOOL] resultado de %s: %s", name, _truncate_for_log(json.dumps(result, ensure_ascii=True)))
+            return result
         if name == "complete_task": # to-do: fazer com que busque por nome da tarefa também
             task_id = int(arguments.get("task_id"))
             completed = bool(arguments.get("completed", True))
-            return complete_task(task_id=task_id, completed=completed) or {"error": "Task not found"}
+            result = complete_task(task_id=task_id, completed=completed) or {"error": "Task not found"}
+            logger.info("[TOOL] resultado de %s: %s", name, _truncate_for_log(json.dumps(result, ensure_ascii=True)))
+            return result
         if name == "update_task":
             task_id = int(arguments.get("task_id"))
-            return update_task(
+            result = update_task(
                 task_id=task_id,
                 title=arguments.get("title"),
                 description=arguments.get("description"),
                 due_date=arguments.get("due_date"),
                 completed=arguments.get("completed"),
             ) or {"error": "Task not found"}
+            logger.info("[TOOL] resultado de %s: %s", name, _truncate_for_log(json.dumps(result, ensure_ascii=True)))
+            return result
         if name == "delete_task":
             task_id = int(arguments.get("task_id"))
-            return {"deleted": delete_task(task_id)}
+            result = {"deleted": delete_task(task_id)}
+            logger.info("[TOOL] resultado de %s: %s", name, _truncate_for_log(json.dumps(result, ensure_ascii=True)))
+            return result
     except Exception as exc:
+        logger.exception("[TOOL] erro executando %s", name)
         return {"error": str(exc)}
 
+    logger.warning("[TOOL] ferramenta desconhecida: %s", name)
     return {"error": f"Unknown tool: {name}"}
+
+
+def _truncate_for_log(value: str, limit: int = 2000) -> str:
+    if len(value) <= limit:
+        return value
+    return "... [truncated]" + value[limit:]
