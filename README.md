@@ -25,6 +25,7 @@
 - Documento domain-driven-development.pdf: https://www.ricardopedias.com.br/assets/docs/ddd-referencia.pdf
 - Documento divida-tecnica.pdf: https://sol.sbc.org.br/index.php/sbqs/article/download/15290/15133
 - Documento testes-de-software.pdf: https://web.icmc.usp.br/SCATUSU/RT/Notas_Didaticas/nd_65.pdf
+- Documento Inteligencia-Artificial.pdf: https://www.uece.br/cct/wp-content/uploads/sites/28/2021/07/Intelige%CC%82ncia-Artificial.pdf
 
 ## Ferramentas utilizadas:
 #### Stack: 

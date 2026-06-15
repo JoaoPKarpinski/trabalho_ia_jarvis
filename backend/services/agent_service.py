@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import logging
 import os
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_BASE_URL = "https://llm.liaufms.org/v1/gemma-3-12b-it"
 DEFAULT_MODEL = "google/gemma-3-12b-it"
 DEFAULT_TOOL_MODE = "wrapper"
+CURRENT_DATE = datetime.now().strftime("%Y-%m-%d")
 
 SYSTEM_PROMPT_AUTO = (
     "You are Jarvis, an academic assistant. "
@@ -57,6 +59,7 @@ SYSTEM_PROMPT_MANUAL = (
     "Do not ask to call tools and do not output tool code. "
     "If the document context is empty, say you could not find relevant info locally and answer with your own knowledge. "
     "Respond in Brazilian Portuguese and keep answers concise."
+    + f"Consider today as {CURRENT_DATE}. "
 )
 
 def run_agent(message: str, history: Optional[List[Dict[str, str]]] = None) -> str:
