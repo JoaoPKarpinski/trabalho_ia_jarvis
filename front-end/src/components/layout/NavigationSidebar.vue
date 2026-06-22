@@ -13,7 +13,8 @@ const options = [
   { id: 'chat', label: 'Chat' },
   { id: 'agenda', label: 'Agenda' },
   { id: 'tasks', label: 'Tarefas' },
-  { id: 'quiz', label: 'Exercicios' }
+  { id: 'quiz', label: 'Exercicios' },
+  { id: 'study', label: 'Dissertativas' }
 ]
 </script>
 

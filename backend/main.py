@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from database.sqlite_manager import init_db
-from routers import agenda, chat, documents, quiz, tasks
+from routers import agenda, chat, documents, quiz, study_session, tasks
 
 logging.basicConfig(level=logging.INFO)
 
@@ -30,6 +30,7 @@ app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(agenda.router, prefix="/api", tags=["agenda"])
 app.include_router(quiz.router, prefix="/api", tags=["quiz"])
+app.include_router(study_session.router, prefix="/api", tags=["study-session"])
 app.include_router(tasks.router, prefix="/api", tags=["tasks"])
 
 app.mount("/", StaticFiles(directory="dist", html=True), name="static") # front-end

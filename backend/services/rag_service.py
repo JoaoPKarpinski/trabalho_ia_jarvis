@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 from pypdf import PdfReader
 
-from database.vector_manager import get_collection
+from database.vector_manager import get_collection, repair_collection_storage
 
 
 def ingest_document(file_name: str, content_type: str, file_bytes: bytes) -> Dict[str, int]:
@@ -15,14 +15,35 @@ def ingest_document(file_name: str, content_type: str, file_bytes: bytes) -> Dic
     if not chunks:
         return {"chunks_added": 0}
 
-    collection = get_collection()
     ids = [f"{file_name}-{idx}-{uuid.uuid4().hex}" for idx in range(len(chunks))]
     metadatas = [{"source": file_name, "chunk": idx} for idx in range(len(chunks))]
-    collection.add(documents=chunks, metadatas=metadatas, ids=ids)
-    return {"chunks_added": len(chunks)}
+    try:
+        collection = get_collection()
+        collection.add(documents=chunks, metadatas=metadatas, ids=ids)
+        return {"chunks_added": len(chunks)}
+    except Exception:
+        repair_collection_storage()
+        collection = get_collection()
+        collection.add(documents=chunks, metadatas=metadatas, ids=ids)
+        return {"chunks_added": len(chunks)}
 
 
 def search_documents(query: str, top_k: int = 4) -> Dict[str, object]:
+    try:
+        return _search_documents_once(query=query, top_k=top_k)
+    except Exception:
+        repair_collection_storage()
+        try:
+            return _search_documents_once(query=query, top_k=top_k)
+        except Exception as exc:
+            return {
+                "context": "",
+                "sources": [],
+                "error": str(exc),
+            }
+
+
+def _search_documents_once(query: str, top_k: int) -> Dict[str, object]:
     collection = get_collection()
     results = collection.query(
         query_texts=[query],

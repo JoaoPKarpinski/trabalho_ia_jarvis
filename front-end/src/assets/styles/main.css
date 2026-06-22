@@ -79,6 +79,10 @@ body::before {
   grid-column: span 2;
 }
 
+.panel-study {
+  grid-column: span 2;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -801,6 +805,119 @@ input[type="time"]:focus {
   font-size: 14px;
 }
 
+.study-session {
+  display: grid;
+  gap: 16px;
+}
+
+.study-session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.study-session-label {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.study-session-value,
+.study-session-topic {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.study-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scroll-behavior: smooth;
+}
+
+.study-message {
+  width: fit-content;
+  max-width: min(100%, 820px);
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10px 24px rgba(18, 18, 18, 0.06);
+}
+
+.study-message-user {
+  align-self: flex-end;
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.32);
+}
+
+.study-message-assistant {
+  align-self: flex-start;
+  background: rgba(14, 165, 164, 0.1);
+  border-color: rgba(14, 165, 164, 0.24);
+}
+
+.study-message-badge {
+  margin-bottom: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.study-message-content {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.study-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.study-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 92px;
+}
+
+.study-action-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.study-finish-box {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(14, 165, 164, 0.24);
+  background: rgba(14, 165, 164, 0.08);
+}
+
+.study-finish-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.study-finish-text {
+  margin: 0;
+  color: var(--muted);
+}
+
 .task-title {
   margin: 0;
   font-weight: 600;
@@ -855,6 +972,10 @@ input[type="time"]:focus {
   .panel-quiz {
     grid-column: span 1;
   }
+
+  .panel-study {
+    grid-column: span 1;
+  }
 }
 
 @media (max-width: 980px) {
@@ -883,5 +1004,9 @@ input[type="time"]:focus {
 
   .quiz-field-wide {
     grid-column: span 1;
+  }
+
+  .study-message {
+    max-width: 100%;
   }
 }

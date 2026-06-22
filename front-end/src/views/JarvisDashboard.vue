@@ -5,6 +5,7 @@ import ChatInterface from '../components/chat/ChatInterface.vue'
 import AgendaViewer from '../components/agenda/AgendaViewer.vue'
 import TaskManager from '../components/tasks/TaskManager.vue'
 import QuizGenerator from '../components/quiz/QuizGenerator.vue'
+import EssayQuestionsSession from '../components/study/EssayQuestionsSession.vue'
 import { useAgendaStore } from '../stores/agendaStore'
 import { useTaskStore } from '../stores/taskStore'
 import { useChatStore } from '../stores/chatStore'
@@ -24,6 +25,7 @@ const showChat = computed(() => activePanel.value === 'all' || activePanel.value
 const showAgenda = computed(() => activePanel.value === 'all' || activePanel.value === 'agenda')
 const showTasks = computed(() => activePanel.value === 'all' || activePanel.value === 'tasks')
 const showQuiz = computed(() => activePanel.value === 'all' || activePanel.value === 'quiz')
+const showStudy = computed(() => activePanel.value === 'all' || activePanel.value === 'study')
 
 const setPanel = (panel) => {
   activePanel.value = panel
@@ -82,6 +84,17 @@ const setPanel = (panel) => {
           </div>
         </header>
         <QuizGenerator />
+      </section>
+
+      <section v-show="showStudy" class="panel panel-study">
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">Active Recall</p>
+            <h2>Perguntas dissertativas</h2>
+            <p class="subtitle">Sessão isolada para tema, perguntas e avaliação contínua.</p>
+          </div>
+        </header>
+        <EssayQuestionsSession />
       </section>
     </main>
   </div>
